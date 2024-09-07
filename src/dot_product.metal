@@ -29,8 +29,8 @@ void sgemm_naive(
   uint3   ntg[[threads_per_threadgroup]]
 ) {
   // compute position in C that this thread is responsible for
-  const uint x = ntg.x * tgpig.x + tpitg.x;
-  const uint y = ntg.y * tgpig.y + tpitg.y;
+  const uint x = tpitg.x; // ntg.x * tgpig.x + tpitg.x;
+  const uint y = tpitg.y; // ntg.y * tgpig.y + tpitg.y;
 
   // `if` condition is necessary for when M or N aren't multiples of 32.
   if (x < M && y < N) {
