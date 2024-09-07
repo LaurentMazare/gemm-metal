@@ -1,3 +1,4 @@
+// https://siboehm.com/articles/22/CUDA-MMM
 use anyhow::{Error as E, Result};
 
 const DOT: &str = include_str!("dot_product.metal");
@@ -60,6 +61,27 @@ impl<T: Clone> Matrix<T> {
     }
 }
 
+fn mm_check(a: &Matrix<f32>, b: &Matrix<f32>, c: &Matrix<f32>, m: usize, n: usize, k: usize) {
+    let a = a.to_vec();
+    let b = b.to_vec();
+    let c = c.to_vec();
+    let mut cc = vec![0f32; m * n];
+    for i in 0..m {
+        for j in 0..n {
+            for i_k in 0..k {
+                cc[i * n + j] += a[i * k + i_k] * b[i_k * n + j]
+            }
+        }
+    }
+    let max_diff = c
+        .iter()
+        .zip(cc.iter())
+        .map(|(v1, v2)| (v1 - v2).abs())
+        .max_by(|v1, v2| f32::total_cmp(v1, v2))
+        .unwrap();
+    println!("N-DIFF {max_diff}");
+}
+
 pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
     gemm_naive_(m, n, k, repeats, false)
 }
@@ -101,24 +123,7 @@ fn gemm_naive_(m: usize, n: usize, k: usize, repeats: usize, check: bool) -> any
     println!("{m} {n} {k} {gflops:.2}");
 
     if check {
-        let a = a.to_vec();
-        let b = b.to_vec();
-        let c = c.to_vec();
-        let mut cc = vec![0f32; m * n];
-        for i in 0..m {
-            for j in 0..n {
-                for i_k in 0..k {
-                    cc[i * n + j] += a[i * k + i_k] * b[i_k * n + j]
-                }
-            }
-        }
-        let max_diff = c
-            .iter()
-            .zip(cc.iter())
-            .map(|(v1, v2)| (v1 - v2).abs())
-            .max_by(|v1, v2| f32::total_cmp(v1, v2))
-            .unwrap();
-        println!("N-DIFF {max_diff}");
+        mm_check(&a, &b, &c, m, n, k)
     }
     Ok(())
 }
@@ -170,24 +175,7 @@ fn gemm_coalescing_(
     println!("{m} {n} {k} {gflops:.2}");
 
     if check {
-        let a = a.to_vec();
-        let b = b.to_vec();
-        let c = c.to_vec();
-        let mut cc = vec![0f32; m * n];
-        for i in 0..m {
-            for j in 0..n {
-                for i_k in 0..k {
-                    cc[i * n + j] += a[i * k + i_k] * b[i_k * n + j]
-                }
-            }
-        }
-        let max_diff = c
-            .iter()
-            .zip(cc.iter())
-            .map(|(v1, v2)| (v1 - v2).abs())
-            .max_by(|v1, v2| f32::total_cmp(v1, v2))
-            .unwrap();
-        println!("C-DIFF {max_diff}");
+        mm_check(&a, &b, &c, m, n, k)
     }
     Ok(())
 }
