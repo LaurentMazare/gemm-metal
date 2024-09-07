@@ -100,6 +100,9 @@ void sgemm_shared_mem_block(
   // the inner row & col that we're accessing in this thread
   const uint threadCol = tpitg.x % BLOCKSIZE;
   const uint threadRow = tpitg.x / BLOCKSIZE;
+  if (threadCol >= N || threadRow >= M) {
+    return;
+  }
 
   // advance pointers to the starting positions
   A += cRow * BLOCKSIZE * K;                    // row=cRow, col=0
@@ -111,6 +114,7 @@ void sgemm_shared_mem_block(
     // Have each thread load one of the elements in A & B
     // Make the threadCol (=threadIdx.x) the consecutive index
     // to allow global memory access coalescing
+    // TODO(laurent): this copies potentially out of bound data.
     As[threadRow * BLOCKSIZE + threadCol] = A[threadRow * K + threadCol];
     Bs[threadRow * BLOCKSIZE + threadCol] = B[threadRow * N + threadCol];
 
@@ -120,6 +124,7 @@ void sgemm_shared_mem_block(
     B += BLOCKSIZE * N;
 
     // execute the dotproduct on the currently cached block
+    // TODO(laurent): this copies potentially out of bound data.
     for (int dotIdx = 0; dotIdx < BLOCKSIZE; ++dotIdx) {
       tmp += As[threadRow * BLOCKSIZE + dotIdx] *
              Bs[dotIdx * BLOCKSIZE + threadCol];

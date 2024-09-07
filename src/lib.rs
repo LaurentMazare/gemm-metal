@@ -73,8 +73,6 @@ fn mm_check(a: &Matrix<f32>, b: &Matrix<f32>, c: &Matrix<f32>, m: usize, n: usiz
             }
         }
     }
-    println!("{c:?}");
-    println!("{cc:?}");
     let max_diff = c
         .iter()
         .zip(cc.iter())
