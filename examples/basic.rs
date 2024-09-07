@@ -21,11 +21,13 @@ fn main() -> anyhow::Result<()> {
                 5
             };
             if sz < 100 {
-                gemm_metal::gemm_naive_check(sz, sz, sz, cnt)?;
-                gemm_metal::gemm_coalescing_check(sz, sz, sz, cnt)?;
+                // gemm_metal::gemm_naive_check(sz, sz, sz, cnt)?;
+                // gemm_metal::gemm_coalescing_check(sz, sz, sz, cnt)?;
+                gemm_metal::gemm_shared_mem_block_check(sz, sz, sz, cnt)?;
             } else {
                 gemm_metal::gemm_naive(sz, sz, sz, cnt)?;
                 gemm_metal::gemm_coalescing(sz, sz, sz, cnt)?;
+                gemm_metal::gemm_shared_mem_block(sz, sz, sz, cnt)?;
             }
         }
         Ok(())
