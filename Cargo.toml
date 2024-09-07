@@ -1,0 +1,19 @@
+[package]
+name = "gemm-metal"
+version = "0.1.0"
+edition = "2021"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/LaurentMazare/gemm-metal"
+
+[dependencies]
+anyhow = "1.0.79"
+half = "2.4.1"
+metal = "0.29.0"
+objc = "0.2.7"
+
+[profile.release]
+debug = true
+
+[profile.release-no-debug]
+inherits = "release"
+debug = false
