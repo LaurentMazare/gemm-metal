@@ -61,6 +61,13 @@ impl<T: Clone> Matrix<T> {
 }
 
 pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_naive_(m, n, k, repeats, false)
+}
+pub fn gemm_naive_check(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_naive_(m, n, k, repeats, true)
+}
+
+fn gemm_naive_(m: usize, n: usize, k: usize, repeats: usize, check: bool) -> anyhow::Result<()> {
     use metal::Device;
 
     let device = Device::system_default().expect("No device found");
@@ -81,9 +88,10 @@ pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Resul
         encoder.use_resource(a, metal::MTLResourceUsage::Read);
         encoder.use_resource(b, metal::MTLResourceUsage::Read);
         encoder.use_resource(c, metal::MTLResourceUsage::Write);
-        let grid_size = metal::MTLSize::new(m as u64, n as u64, 1);
+        let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
         let threadgroup_size = metal::MTLSize::new(32, 32, 1);
-        encoder.dispatch_threads(grid_size, threadgroup_size);
+        // Somehow, using dispatch_threads with non-even group size doesn't work properly here.
+        encoder.dispatch_thread_groups(grid_size, threadgroup_size);
         encoder.end_encoding();
         cb.commit();
         cb.wait_until_completed();
@@ -92,7 +100,7 @@ pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Resul
     let gflops = (n * m * k) as f64 * 2. / (1e9 * dt);
     println!("{m} {n} {k} {gflops:.2}");
 
-    if false {
+    if check {
         let a = a.to_vec();
         let b = b.to_vec();
         let c = c.to_vec();
@@ -110,12 +118,25 @@ pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Resul
             .map(|(v1, v2)| (v1 - v2).abs())
             .max_by(|v1, v2| f32::total_cmp(v1, v2))
             .unwrap();
-        println!("{max_diff}");
+        println!("N-DIFF {max_diff}");
     }
     Ok(())
 }
 
 pub fn gemm_coalescing(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_coalescing_(m, n, k, repeats, false)
+}
+pub fn gemm_coalescing_check(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_coalescing_(m, n, k, repeats, true)
+}
+
+fn gemm_coalescing_(
+    m: usize,
+    n: usize,
+    k: usize,
+    repeats: usize,
+    check: bool,
+) -> anyhow::Result<()> {
     use metal::Device;
 
     let device = Device::system_default().expect("No device found");
@@ -136,9 +157,10 @@ pub fn gemm_coalescing(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::
         encoder.use_resource(a, metal::MTLResourceUsage::Read);
         encoder.use_resource(b, metal::MTLResourceUsage::Read);
         encoder.use_resource(c, metal::MTLResourceUsage::Write);
-        let grid_size = metal::MTLSize::new(m as u64, n as u64, 1);
+        let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
         let threadgroup_size = metal::MTLSize::new(32 * 32, 1, 1);
-        encoder.dispatch_threads(grid_size, threadgroup_size);
+        // Somehow, using dispatch_threads with non-even group size doesn't work properly here.
+        encoder.dispatch_thread_groups(grid_size, threadgroup_size);
         encoder.end_encoding();
         cb.commit();
         cb.wait_until_completed();
@@ -146,5 +168,26 @@ pub fn gemm_coalescing(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::
     let dt = start_time.elapsed().as_secs_f64() / repeats as f64;
     let gflops = (n * m * k) as f64 * 2. / (1e9 * dt);
     println!("{m} {n} {k} {gflops:.2}");
+
+    if check {
+        let a = a.to_vec();
+        let b = b.to_vec();
+        let c = c.to_vec();
+        let mut cc = vec![0f32; m * n];
+        for i in 0..m {
+            for j in 0..n {
+                for i_k in 0..k {
+                    cc[i * n + j] += a[i * k + i_k] * b[i_k * n + j]
+                }
+            }
+        }
+        let max_diff = c
+            .iter()
+            .zip(cc.iter())
+            .map(|(v1, v2)| (v1 - v2).abs())
+            .max_by(|v1, v2| f32::total_cmp(v1, v2))
+            .unwrap();
+        println!("C-DIFF {max_diff}");
+    }
     Ok(())
 }
