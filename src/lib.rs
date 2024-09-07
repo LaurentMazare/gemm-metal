@@ -89,3 +89,40 @@ pub fn gemm_naive(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Resul
     println!("{m} {n} {k} {gflops:.2}");
     Ok(())
 }
+
+pub fn gemm_coalescing(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    use metal::Device;
+
+    let device = Device::system_default().expect("No device found");
+    let lib = device.new_library_with_source(DOT, &metal::CompileOptions::new()).unwrap();
+    let function = lib.get_function("sgemm_coalescing", None).unwrap();
+    let pipeline = device.new_compute_pipeline_state_with_function(&function).unwrap();
+    let a = new_buffer(&device, &vec![0f32; m * k]);
+    let b = new_buffer(&device, &vec![0f32; k * n]);
+
+    let c = device.new_buffer(
+        (m * n * std::mem::size_of::<f32>()) as u64,
+        metal::MTLResourceOptions::StorageModeManaged,
+    );
+    let command_queue = device.new_command_queue();
+    let start_time = std::time::Instant::now();
+    for _ in 0..repeats {
+        let cb = command_queue.new_command_buffer();
+        let encoder = cb.new_compute_command_encoder();
+        encoder.set_compute_pipeline_state(&pipeline);
+        set_params!(encoder, (&a, &b, &c, m, n, k, 1., 0.));
+        encoder.use_resource(&a, metal::MTLResourceUsage::Read);
+        encoder.use_resource(&b, metal::MTLResourceUsage::Read);
+        encoder.use_resource(&c, metal::MTLResourceUsage::Write);
+        let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
+        let threadgroup_size = metal::MTLSize::new(32 * 32, 1, 1);
+        encoder.dispatch_threads(grid_size, threadgroup_size);
+        encoder.end_encoding();
+        cb.commit();
+        cb.wait_until_completed();
+    }
+    let dt = start_time.elapsed().as_secs_f64() / repeats as f64;
+    let gflops = (n * m * k) as f64 * 2. / (1e9 * dt);
+    println!("{m} {n} {k} {gflops:.2}");
+    Ok(())
+}
