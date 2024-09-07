@@ -1,9 +1,10 @@
 [[kernel]]
 void dot_product(
-  constant float *inA [[buffer(0)]],
-  constant float *inB [[buffer(1)]],
-  device float *result [[buffer(2)]],
-  uint index [[thread_position_in_grid]])
+  device const float *a [[buffer(0)]],
+  device const float *b [[buffer(1)]],
+  device float *c [[buffer(2)]],
+  uint3 tpig[[thread_position_in_grid]])
 {
-  result[index] = inA[index] * inB[index];
+  int index = tpig.x;
+  c[index] = a[index] * b[index];
 }
