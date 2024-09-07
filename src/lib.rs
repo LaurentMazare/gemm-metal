@@ -1,5 +1,7 @@
 const DOT: &str = include_str!("dot_product.metal");
 
+mod utils;
+
 fn read_to_vec<T: Clone>(buffer: &metal::Buffer, n: usize) -> Vec<T> {
     let ptr = buffer.contents() as *const T;
     assert!(!ptr.is_null());
@@ -34,14 +36,48 @@ pub fn dot_product() -> anyhow::Result<()> {
 
     let encoder = cb.new_compute_command_encoder();
     encoder.set_compute_pipeline_state(&pipeline);
-    encoder.set_buffer(0, Some(&a), 0);
-    encoder.set_buffer(1, Some(&b), 0);
-    encoder.set_buffer(2, Some(&c), 0);
+    set_params!(encoder, (&a, &b, &c));
     encoder.use_resource(&a, metal::MTLResourceUsage::Read);
     encoder.use_resource(&b, metal::MTLResourceUsage::Read);
     encoder.use_resource(&c, metal::MTLResourceUsage::Write);
     let grid_size = metal::MTLSize::new(length, 1, 1);
     let threadgroup_size = metal::MTLSize::new(1, 1, 1);
+    encoder.dispatch_threads(grid_size, threadgroup_size);
+    encoder.end_encoding();
+    cb.commit();
+    cb.wait_until_completed();
+    println!("Done!");
+    let v: Vec<f32> = read_to_vec(&c, length as usize);
+    println!("{v:?}");
+
+    Ok(())
+}
+
+pub fn gemm_naive(n: usize, m: usize) -> anyhow::Result<()> {
+    use metal::Device;
+
+    let device = Device::system_default().expect("No device found");
+    let lib = device.new_library_with_source(DOT, &metal::CompileOptions::new()).unwrap();
+    let function = lib.get_function("sgemm_naive", None).unwrap();
+    let pipeline = device.new_compute_pipeline_state_with_function(&function).unwrap();
+    let a = new_buffer(&device, &[42f32, 2.0, 3., 3.]);
+    let b = new_buffer(&device, &[1f32, -3.14, 3., 7.]);
+
+    let length = a.length() / std::mem::size_of::<u32>() as u64;
+    let size = length * core::mem::size_of::<u32>() as u64;
+
+    let c = device.new_buffer(size, metal::MTLResourceOptions::StorageModeManaged);
+    let command_queue = device.new_command_queue();
+    let cb = command_queue.new_command_buffer();
+
+    let encoder = cb.new_compute_command_encoder();
+    encoder.set_compute_pipeline_state(&pipeline);
+    set_params!(encoder, (&a, &b, &c, 2, 2, 2, 1., 0.));
+    encoder.use_resource(&a, metal::MTLResourceUsage::Read);
+    encoder.use_resource(&b, metal::MTLResourceUsage::Read);
+    encoder.use_resource(&c, metal::MTLResourceUsage::Write);
+    let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
+    let threadgroup_size = metal::MTLSize::new(32, 32, 1);
     encoder.dispatch_threads(grid_size, threadgroup_size);
     encoder.end_encoding();
     cb.commit();
