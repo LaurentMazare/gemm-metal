@@ -178,6 +178,18 @@ impl GemmKernel for NaiveSimd {
     }
 }
 
+pub struct TiledSimd;
+impl GemmKernel for TiledSimd {
+    const NAME: &'static str = "sgemm_tiled_simd";
+    const SHARED_MEM: &'static [u64] = &[];
+    fn grid_size(m: usize, n: usize) -> metal::MTLSize {
+        metal::MTLSize::new((m as u64).div_ceil(32), (n as u64).div_ceil(64), 1)
+    }
+    fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
+        metal::MTLSize::new(32, 2, 1)
+    }
+}
+
 pub fn mm_sync<K: GemmKernel>(
     a: &Matrix<f32>,
     b: &Matrix<f32>,

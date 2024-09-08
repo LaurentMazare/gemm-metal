@@ -54,7 +54,7 @@ fn run_bench<K: GemmKernel>(n: usize, repeats: usize) -> anyhow::Result<f64> {
 }
 
 const SIZES_TO_CHECK: &[usize] = &[8, 32, 64, 128, 256];
-const SIZES_TO_BENCH: &[usize] = &[32, 64, 128, 256, 512, 1024, 2048, 4096, 4096 + 2048, 8192];
+const SIZES_TO_BENCH: &[usize] = &[64, 128, 256, 512, 1024, 2048, 4096, 4096 + 2048, 8192];
 
 fn run_benchs<K: GemmKernel>() -> anyhow::Result<()> {
     use std::io::Write;
@@ -110,6 +110,7 @@ fn main() -> anyhow::Result<()> {
             print!("{sz:6} ");
         }
         println!();
+        // run_benchs::<gemm_metal::TiledSimd>()?;
         run_benchs::<gemm_metal::NaiveSimd>()?;
         run_benchs::<gemm_metal::Tiling2D>()?;
         run_benchs::<gemm_metal::Tiling1D>()?;

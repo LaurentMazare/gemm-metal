@@ -379,7 +379,6 @@ void sgemm_tiled_simd(
   uint3 lid[[thread_position_in_threadgroup]],
   uint3 ntg[[threads_per_threadgroup]]
 ) {
-  /*
   a += gid.x * 32 * N + (gid.y * ntg.y + lid.y) * 32;
   data1 += gid.x * 32 * K;
   data2 += (gid.y * ntg.y + lid.y) * 32;
@@ -400,15 +399,14 @@ void sgemm_tiled_simd(
     }
 
     for (uint i = 0; i < 4; ++i) {
-      for (uint j = 0; j < 4; ++i) {
+      for (uint j = 0; j < 4; ++j) {
         simdgroup_multiply_accumulate(acc[i][j], A[j], B[i], acc[i][j]);
       }
     }
   }
   for (uint i = 0; i < 4; ++i) {
-    for (uint j = 0; j < 4; ++i) {
+    for (uint j = 0; j < 4; ++j) {
       simdgroup_store(acc[i][j], a+8*i+8*j*N, N, ulong2(0, 0));
     }
   }
-  */
 }
