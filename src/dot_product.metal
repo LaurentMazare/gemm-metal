@@ -276,6 +276,8 @@ kernel void sgemm_2d_block_tiling(
   const uint strideB = numThreadsBlocktile / BN;
 
   // allocate thread-local cache for results in registerfile
+  // TODO(laurent): this doesn't seem to fit in registers for a M3 Max, so we might have to reduce
+  // the sizes.
   float threadResults[TM * TN] = {0.0};
   // register caches for As and Bs
   float regM[TM] = {0.0};
