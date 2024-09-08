@@ -260,12 +260,12 @@ fn gemm_2d_tiling_(
     const BM: u64 = 64;
     const BN: u64 = 64;
     const BK: u64 = 8;
-    const TM: u64 = 8;
-    const TN: u64 = 8;
+    const TM: u64 = 4;
+    const TN: u64 = 4;
     let grid_size = metal::MTLSize::new((n as u64).div_ceil(BN), (m as u64).div_ceil(BM), 1);
     let threadgroup_size = metal::MTLSize::new((BM * BN) / (TN * TM), 1, 1);
     launch_gemm(
-        "sgemm_2d_bt_64_64_8_8_8",
+        "sgemm_2d_bt_64_64_8_4_4",
         m,
         n,
         k,
