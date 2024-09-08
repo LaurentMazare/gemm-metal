@@ -34,7 +34,7 @@ All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 | Tiling1D | 583 | 925 | 979 | 1015 | 1009 | 1016 |
 | Tiling2D | 778 | 1319 | 1487 | 1619 | 1646 | 1658 |
 
-*MacBook Pro M3Max 14" 36GB 2023 (30 GPU cores)*
+*MacBook Pro M3Max 14" 36GB 2024 (30 GPU cores)*
 
 | Kernel | 512 | 1024 | 2048 | 4096 | 6144 | 8192 |
 | ------ | --- | ---- | ---- | ---- | ---- | ---- |
