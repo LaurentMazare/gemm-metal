@@ -7,16 +7,18 @@ fn check<K: GemmKernel>(n: usize) -> anyhow::Result<f32> {
         None => anyhow::bail!("no default device found"),
     };
 
-    let pl = gemm_metal::pipeline::<K>()?;
     let (m, k) = (n, n);
 
     let a: Matrix<f32> = Matrix::randn(&device, m, k);
     let b: Matrix<f32> = Matrix::randn(&device, k, n);
     let c: Matrix<f32> = Matrix::zeros(&device, m, n);
 
+    let pl = gemm_metal::pipeline::<K>()?;
     let cq = device.new_command_queue();
     gemm_metal::mm_sync::<K>(&a, &b, &c, &pl, &cq)?;
     let c_vec = c.to_vec();
+    let pl = gemm_metal::pipeline::<gemm_metal::Naive>()?;
+    let cq = device.new_command_queue();
     gemm_metal::mm_sync::<gemm_metal::Naive>(&a, &b, &c, &pl, &cq)?;
     let c_ref = c.to_vec();
     let max_diff = c_vec
@@ -51,7 +53,7 @@ fn run_bench<K: GemmKernel>(n: usize, repeats: usize) -> anyhow::Result<f64> {
     Ok(gflops)
 }
 
-const SIZES_TO_CHECK: &[usize] = &[];
+const SIZES_TO_CHECK: &[usize] = &[32, 64, 128, 256];
 const SIZES_TO_BENCH: &[usize] = &[32, 64, 128, 256, 512, 1024, 2048, 4096, 4096 + 2048, 8192];
 
 fn run_benchs<K: GemmKernel>() -> anyhow::Result<()> {
@@ -73,10 +75,14 @@ fn run_benchs<K: GemmKernel>() -> anyhow::Result<()> {
         std::io::stdout().flush()?;
     }
     println!();
+    Ok(())
+}
+
+fn run_checks<K: GemmKernel>() -> anyhow::Result<()> {
     for &sz in SIZES_TO_CHECK {
         let diff = check::<K>(sz)?;
         if diff.is_nan() || diff > 1e-5 {
-            println!("DIFF SPOTTED {diff}");
+            println!("DIFF SPOTTED {} {sz} {diff}", K::NAME);
         }
     }
     Ok(())
@@ -92,6 +98,12 @@ fn main() -> anyhow::Result<()> {
         println!("MaxTransferRate:            {}", device.max_transfer_rate());
         println!("MaxBufferLength:            {}", device.max_buffer_length());
 
+        run_checks::<gemm_metal::Tiling2D>()?;
+        run_checks::<gemm_metal::Tiling1D>()?;
+        run_checks::<gemm_metal::SharedMem>()?;
+        run_checks::<gemm_metal::Coalescing>()?;
+        run_checks::<gemm_metal::SharedMem>()?;
+
         print!("{:26} ", "");
         for &sz in SIZES_TO_BENCH {
             print!("{sz:6} ");
@@ -102,6 +114,7 @@ fn main() -> anyhow::Result<()> {
         run_benchs::<gemm_metal::SharedMem>()?;
         run_benchs::<gemm_metal::Coalescing>()?;
         run_benchs::<gemm_metal::Naive>()?;
+
         Ok(())
     })
 }
