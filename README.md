@@ -13,7 +13,7 @@ the kernels are certainly naive and/or buggy.
 
 All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 
-*MacBook Air 16GB 2024 (10 GPU cores)*
+*MacBook Air M3 16GB 2024 (10 GPU cores)*
 
 | Kernel | 512 | 1024 | 2048 | 4096 |
 | ------ | --- | ---- | ---- | ---- |
@@ -24,7 +24,7 @@ All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 | Tiling2D   | 601 | 1090 | 1217 | 1220 |
 
 
-*MacBook Pro 14" 16GB 2023 (16 GPU cores)*
+*MacBook Pro M2Pro 14" 16GB 2023 (16 GPU cores)*
 
 | Kernel | 512 | 1024 | 2048 | 4096 | 6144 | 8192 |
 | ------ | --- | ---- | ---- | ---- | ---- | ---- |
@@ -34,7 +34,7 @@ All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 | Tiling1D | 583 | 925 | 979 | 1015 | 1009 | 1016 |
 | Tiling2D | 778 | 1319 | 1487 | 1619 | 1646 | 1658 |
 
-*MacBook Pro 14" 36GB 2023 (30 GPU cores)*
+*MacBook Pro M3Max 14" 36GB 2023 (30 GPU cores)*
 
 | Kernel | 512 | 1024 | 2048 | 4096 | 6144 | 8192 |
 | ------ | --- | ---- | ---- | ---- | ---- | ---- |
