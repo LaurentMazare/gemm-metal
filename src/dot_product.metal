@@ -1,4 +1,5 @@
 #include <metal_stdlib>
+#include <metal_simdgroup_matrix>
 using namespace metal;
 
 #define BLOCKSIZE 32
@@ -333,3 +334,66 @@ template [[host_name("sgemm_2d_bt_64_64_8_8_8")]] kernel sgemm_shared_ab sgemm_2
 template [[host_name("sgemm_2d_bt_64_64_8_4_4")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 4, 4>;
 template [[host_name("sgemm_2d_bt_64_64_8_8_4")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 8, 4>;
 template [[host_name("sgemm_2d_bt_64_64_8_4_8")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 4, 8>;
+
+// https://github.com/tinygrad/tinygrad/blob/750696a0269d87f09f7d95da71b71f9ea7dc3a7e/extra/gemm/metal_matmul.py#L33
+[[kernel]]
+void sgemm_1d_simd8x8(
+  device const float *data1,
+  device const float *data2,
+  device float *a,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha, // TODO: unused, assumed to be 1
+  constant float &beta, // TODO: unused, assumed to be 0
+  uint3 gid[[threadgroup_position_in_grid]],
+  uint3 lid[[thread_position_in_threadgroup]],
+  uint3 ntg[[threads_per_threadgroup]]
+) {
+  a += gid.x * 8 * N + (gid.y * ntg.y + lid.y) * 8;
+  data1 += gid.x * 8 * K;
+  data2 += (gid.y * ntg.y + lid.y) * 8;
+  simdgroup_float8x8 acc = simdgroup_float8x8(0);
+  simdgroup_float8x8 A;
+  simdgroup_float8x8 B;
+  for (uint k = 0; k < K; k+=8) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    simdgroup_load(A, data1 + k, K, ulong2(0, 0));
+    simdgroup_load(B, data2 + k*N, N, ulong2(0, 0));
+    simdgroup_multiply_accumulate(acc, A, B, acc);
+  }
+  simdgroup_store(acc, a, N, ulong2(0, 0));
+
+  /*
+  a += gid.x * 32 * N + (gid.y * ntg.y + lid.y) * 32;
+  data1 += gid.x * 32 * K;
+  data2 += (gid.y * ntg.y + lid.y) * 32;
+
+  simdgroup_float8x8 acc[4][4];
+  for (uint i = 0; i < 4; i++) {
+    for (uint j = 0; j < 4; j++) {
+      acc[i][j] = simdgroup_float8x8(0);
+    }
+  }
+  simdgroup_float8x8 A[4];
+  simdgroup_float8x8 B[4];
+  for (uint k = 0; k < K; k+=8) {
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (uint i = 0; i < 4; ++i) {
+      simdgroup_load(A[i], data1+k+i*8*K, K, ulong2(0, 0));
+      simdgroup_load(B[i], data2+8*i+k*N, N, ulong2(0, 0));
+    }
+
+    for (uint i = 0; i < 4; ++i) {
+      for (uint j = 0; j < 4; ++i) {
+        simdgroup_multiply_accumulate(acc[i][j], A[j], B[i], acc[i][j]);
+      }
+    }
+  }
+  for (uint i = 0; i < 4; ++i) {
+    for (uint j = 0; j < 4; ++i) {
+      simdgroup_store(acc[i][j], a+8*i+8*j*N, N, ulong2(0, 0));
+    }
+  }
+  */
+}

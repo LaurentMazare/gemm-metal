@@ -53,7 +53,7 @@ fn run_bench<K: GemmKernel>(n: usize, repeats: usize) -> anyhow::Result<f64> {
     Ok(gflops)
 }
 
-const SIZES_TO_CHECK: &[usize] = &[32, 64, 128, 256];
+const SIZES_TO_CHECK: &[usize] = &[8, 32, 64, 128, 256];
 const SIZES_TO_BENCH: &[usize] = &[32, 64, 128, 256, 512, 1024, 2048, 4096, 4096 + 2048, 8192];
 
 fn run_benchs<K: GemmKernel>() -> anyhow::Result<()> {
@@ -98,6 +98,7 @@ fn main() -> anyhow::Result<()> {
         println!("MaxTransferRate:            {}", device.max_transfer_rate());
         println!("MaxBufferLength:            {}", device.max_buffer_length());
 
+        run_checks::<gemm_metal::NaiveSimd>()?;
         run_checks::<gemm_metal::Tiling2D>()?;
         run_checks::<gemm_metal::Tiling1D>()?;
         run_checks::<gemm_metal::SharedMem>()?;
@@ -109,6 +110,7 @@ fn main() -> anyhow::Result<()> {
             print!("{sz:6} ");
         }
         println!();
+        run_benchs::<gemm_metal::NaiveSimd>()?;
         run_benchs::<gemm_metal::Tiling2D>()?;
         run_benchs::<gemm_metal::Tiling1D>()?;
         run_benchs::<gemm_metal::SharedMem>()?;
