@@ -1,13 +1,13 @@
 # gemm-metal
 
-This repo contains some metal implementation for the kernels and techniques
+This repo contains some metal implementations for the kernels and techniques
 described in the amazing blog post [How to Optimize a CUDA Matmul Kernel for
 cuBLAS-like Performance: a Worklog](https://siboehm.com/articles/22/CUDA-MMM).
 The original cuda implementation can be found in
 [siboehm/SGEMM_CUDA](https://github.com/siboehm/SGEMM_CUDA).
 
-This code has been written so has to get more familiar with the metal api so
-the kernels are certainly naive / a work in progress.
+This code was written so as to get more familiar with the metal api so
+the kernels are certainly naive and/or buggy.
 
 ## Benchmarks
 
