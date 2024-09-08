@@ -174,7 +174,7 @@ impl GemmKernel for NaiveSimd {
         metal::MTLSize::new((m as u64).div_ceil(8), (n as u64).div_ceil(8), 1)
     }
     fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
-        metal::MTLSize::new(64, 1, 1)
+        metal::MTLSize::new(32, 1, 1)
     }
 }
 
