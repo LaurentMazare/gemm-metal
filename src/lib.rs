@@ -91,6 +91,7 @@ fn launch_gemm(
     check: bool,
     grid_size: metal::MTLSize,
     threadgroup_size: metal::MTLSize,
+    shared_mems: &[u64],
 ) -> anyhow::Result<()> {
     use metal::Device;
 
@@ -112,8 +113,12 @@ fn launch_gemm(
         encoder.use_resource(a, metal::MTLResourceUsage::Read);
         encoder.use_resource(b, metal::MTLResourceUsage::Read);
         encoder.use_resource(c, metal::MTLResourceUsage::Write);
-        encoder.set_threadgroup_memory_length(0, 32 * 32 * std::mem::size_of::<f32>() as u64); // As
-        encoder.set_threadgroup_memory_length(1, 32 * 32 * std::mem::size_of::<f32>() as u64); // Bs
+        for (sm_idx, sm) in shared_mems.iter().enumerate() {
+            encoder.set_threadgroup_memory_length(
+                sm_idx as u64,
+                (*sm as usize * std::mem::size_of::<f32>()) as u64,
+            );
+        }
         encoder.dispatch_thread_groups(grid_size, threadgroup_size);
         // Somehow, using dispatch_threads with non-even group size doesn't work properly here.
         encoder.end_encoding();
@@ -140,7 +145,7 @@ pub fn gemm_naive_check(m: usize, n: usize, k: usize, repeats: usize) -> anyhow:
 fn gemm_naive_(m: usize, n: usize, k: usize, repeats: usize, check: bool) -> anyhow::Result<()> {
     let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
     let threadgroup_size = metal::MTLSize::new(32, 32, 1);
-    launch_gemm("sgemm_naive", m, n, k, repeats, check, grid_size, threadgroup_size)
+    launch_gemm("sgemm_naive", m, n, k, repeats, check, grid_size, threadgroup_size, &[])
 }
 
 pub fn gemm_coalescing(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
@@ -160,7 +165,7 @@ fn gemm_coalescing_(
 ) -> anyhow::Result<()> {
     let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
     let threadgroup_size = metal::MTLSize::new(32 * 32, 1, 1);
-    launch_gemm("sgemm_coalescing", m, n, k, repeats, check, grid_size, threadgroup_size)
+    launch_gemm("sgemm_coalescing", m, n, k, repeats, check, grid_size, threadgroup_size, &[])
 }
 
 pub fn gemm_shared_mem_block(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
@@ -186,5 +191,50 @@ fn gemm_shared_mem_block_(
 ) -> anyhow::Result<()> {
     let grid_size = metal::MTLSize::new(m.div_ceil(32) as u64, n.div_ceil(32) as u64, 1);
     let threadgroup_size = metal::MTLSize::new(32 * 32, 1, 1);
-    launch_gemm("sgemm_shared_mem_block", m, n, k, repeats, check, grid_size, threadgroup_size)
+    launch_gemm(
+        "sgemm_shared_mem_block",
+        m,
+        n,
+        k,
+        repeats,
+        check,
+        grid_size,
+        threadgroup_size,
+        &[32 * 32, 32 * 32],
+    )
+}
+
+pub fn gemm_1d_tiling(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_1d_tiling_(m, n, k, repeats, false)
+}
+
+pub fn gemm_1d_tiling_check(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_1d_tiling_(m, n, k, repeats, true)
+}
+
+// This is only correct when the block size is divisible by 64.
+fn gemm_1d_tiling_(
+    m: usize,
+    n: usize,
+    k: usize,
+    repeats: usize,
+    check: bool,
+) -> anyhow::Result<()> {
+    const BM: u64 = 64;
+    const BN: u64 = 64;
+    const BK: u64 = 8;
+    const TM: u64 = 8;
+    let grid_size = metal::MTLSize::new((n as u64).div_ceil(BN), (m as u64).div_ceil(BM), 1);
+    let threadgroup_size = metal::MTLSize::new((BM * BN) / TM, 1, 1);
+    launch_gemm(
+        "sgemm_1d_bt_64_64_8_8",
+        m,
+        n,
+        k,
+        repeats,
+        check,
+        grid_size,
+        threadgroup_size,
+        &[BM * BK, BK * BN],
+    )
 }

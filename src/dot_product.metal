@@ -35,7 +35,7 @@ void sgemm_naive(
   // `if` condition is necessary for when M or N aren't multiples of 32.
   if (x < M && y < N) {
     float tmp = 0.0;
-    for (int i = 0; i < K; ++i) {
+    for (uint i = 0; i < K; ++i) {
       tmp += A[x * K + i] * B[i * N + y];
     }
     // C = α*(A@B)+β*C
@@ -64,7 +64,7 @@ void sgemm_coalescing(
   // `if` condition is necessary for when M or N aren't multiples of 32.
   if (x < M && y < N) {
     float tmp = 0.0;
-    for (int i = 0; i < K; ++i) {
+    for (uint i = 0; i < K; ++i) {
       tmp += A[x * K + i] * B[i * N + y];
     }
     // C = α*(A@B)+β*C
@@ -110,7 +110,7 @@ void sgemm_shared_mem_block(
   C += cRow * BLOCKSIZE * N + cCol * BLOCKSIZE; // row=cRow, col=cCol
 
   float tmp = 0.0;
-  for (int bkIdx = 0; bkIdx < K; bkIdx += BLOCKSIZE) {
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BLOCKSIZE) {
     // Have each thread load one of the elements in A & B
     // Make the threadCol (=threadIdx.x) the consecutive index
     // to allow global memory access coalescing
@@ -136,3 +136,100 @@ void sgemm_shared_mem_block(
   C[threadRow * N + threadCol] =
       alpha * tmp + beta * C[threadRow * N + threadCol];
 }
+
+template <const int BM, const int BN, const int BK, const int TM>
+kernel void sgemm_1d_block_tiling(
+  device const float *A,
+  device const float *B,
+  device float *C,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha,
+  constant float &beta,
+  threadgroup float* As [[threadgroup(0)]],
+  threadgroup float* Bs [[threadgroup(1)]],
+  uint3 tgpig[[threadgroup_position_in_grid]],
+  uint3 tpitg[[thread_position_in_threadgroup]],
+  uint3   ntg[[threads_per_threadgroup]]
+) {
+  // If we flip x and y here we get ~30% less performance for large matrices.
+  // The current, 30% faster configuration ensures that blocks with sequential
+  // blockIDs access columns of B sequentially, while sharing the same row of A.
+  // The slower configuration would share columns of A, but access into B would
+  // be non-sequential. So the faster configuration has better spatial locality
+  // and hence a greater L2 hit rate.
+  const uint cRow = tgpig.y;
+  const uint cCol = tgpig.x;
+
+  // each warp will calculate 32*TM elements, with 32 being the columnar dim.
+  const int threadCol = tpitg.x % BN;
+  const int threadRow = tpitg.x / BN;
+
+  // allocate space for the current blocktile in SMEM
+  // __shared__ float As[BM * BK];
+  // __shared__ float Bs[BK * BN];
+
+  // Move blocktile to beginning of A's row and B's column
+  A += cRow * BM * K;
+  B += cCol * BN;
+  C += cRow * BM * N + cCol * BN;
+
+  // todo: adjust this to each thread to load multiple entries and
+  // better exploit the cache sizes
+  assert(BM * BK == blockDim.x);
+  assert(BN * BK == blockDim.x);
+  const uint innerColA = tpitg.x % BK; // warp-level GMEM coalescing
+  const uint innerRowA = tpitg.x / BK;
+  const uint innerColB = tpitg.x % BN; // warp-level GMEM coalescing
+  const uint innerRowB = tpitg.x / BN;
+
+  // allocate thread-local cache for results in registerfile
+  float threadResults[TM] = {0.0};
+
+  // outer loop over block tiles
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
+    // populate the SMEM caches
+    As[innerRowA * BK + innerColA] = A[innerRowA * K + innerColA];
+    Bs[innerRowB * BN + innerColB] = B[innerRowB * N + innerColB];
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // advance blocktile
+    A += BK;
+    B += BK * N;
+
+    // calculate per-thread results
+    for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+      // we make the dotproduct loop the outside loop, which facilitates
+      // reuse of the Bs entry, which we can cache in a tmp var.
+      float tmpB = Bs[dotIdx * BN + threadCol];
+      for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+        threadResults[resIdx] +=
+            As[(threadRow * TM + resIdx) * BK + dotIdx] * tmpB;
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  // write out the results
+  for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+    C[(threadRow * TM + resIdx) * N + threadCol] =
+        alpha * threadResults[resIdx] +
+        beta * C[(threadRow * TM + resIdx) * N + threadCol];
+  }
+}
+
+typedef void (sgemm_shared_ab)(
+  device const float *A,
+  device const float *B,
+  device float *C,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha,
+  constant float &beta,
+  threadgroup float* As [[threadgroup(0)]],
+  threadgroup float* Bs [[threadgroup(1)]],
+  uint3, uint3, uint3);
+
+template [[host_name("sgemm_1d_bt_64_64_8_8")]] kernel sgemm_shared_ab sgemm_1d_block_tiling<64, 64, 8, 8>;
