@@ -335,9 +335,8 @@ template [[host_name("sgemm_2d_bt_64_64_8_4_4")]] kernel sgemm_shared_ab sgemm_2
 template [[host_name("sgemm_2d_bt_64_64_8_8_4")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 8, 4>;
 template [[host_name("sgemm_2d_bt_64_64_8_4_8")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 4, 8>;
 
-// https://github.com/tinygrad/tinygrad/blob/750696a0269d87f09f7d95da71b71f9ea7dc3a7e/extra/gemm/metal_matmul.py#L33
 [[kernel]]
-void sgemm_1d_simd8x8(
+void sgemm_naive_simd(
   device const float *data1,
   device const float *data2,
   device float *a,
@@ -363,7 +362,23 @@ void sgemm_1d_simd8x8(
     simdgroup_multiply_accumulate(acc, A, B, acc);
   }
   simdgroup_store(acc, a, N, ulong2(0, 0));
+}
 
+// https://github.com/tinygrad/tinygrad/blob/750696a0269d87f09f7d95da71b71f9ea7dc3a7e/extra/gemm/metal_matmul.py#L33
+[[kernel]]
+void sgemm_tiled_simd(
+  device const float *data1,
+  device const float *data2,
+  device float *a,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha, // TODO: unused, assumed to be 1
+  constant float &beta, // TODO: unused, assumed to be 0
+  uint3 gid[[threadgroup_position_in_grid]],
+  uint3 lid[[thread_position_in_threadgroup]],
+  uint3 ntg[[threads_per_threadgroup]]
+) {
   /*
   a += gid.x * 32 * N + (gid.y * ntg.y + lid.y) * 32;
   data1 += gid.x * 32 * K;

@@ -168,7 +168,7 @@ impl GemmKernel for Tiling2D {
 
 pub struct NaiveSimd;
 impl GemmKernel for NaiveSimd {
-    const NAME: &'static str = "sgemm_1d_simd8x8";
+    const NAME: &'static str = "sgemm_naive_simd";
     const SHARED_MEM: &'static [u64] = &[];
     fn grid_size(m: usize, n: usize) -> metal::MTLSize {
         metal::MTLSize::new((m as u64).div_ceil(8), (n as u64).div_ceil(8), 1)
