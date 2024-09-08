@@ -98,6 +98,7 @@ fn main() -> anyhow::Result<()> {
         println!("MaxTransferRate:            {}", device.max_transfer_rate());
         println!("MaxBufferLength:            {}", device.max_buffer_length());
 
+        run_checks::<gemm_metal::TiledSimd>()?;
         run_checks::<gemm_metal::NaiveSimd>()?;
         run_checks::<gemm_metal::Tiling2D>()?;
         run_checks::<gemm_metal::Tiling1D>()?;
@@ -110,7 +111,7 @@ fn main() -> anyhow::Result<()> {
             print!("{sz:6} ");
         }
         println!();
-        // run_benchs::<gemm_metal::TiledSimd>()?;
+        run_benchs::<gemm_metal::TiledSimd>()?;
         run_benchs::<gemm_metal::NaiveSimd>()?;
         run_benchs::<gemm_metal::Tiling2D>()?;
         run_benchs::<gemm_metal::Tiling1D>()?;

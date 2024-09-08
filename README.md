@@ -33,6 +33,8 @@ All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 | SharedMem | 378 | 492 | 475 | 479 | 418 | 434 |
 | Tiling1D | 583 | 925 | 979 | 1015 | 1009 | 1016 |
 | Tiling2D | 778 | 1319 | 1487 | 1619 | 1646 | 1658 |
+| NaiveSimd | 538 | 849 | 931 | 965 | 965 | 999 |
+| TiledSimd | 1102 | 2808 | 3849 | 4087 | 4090 | 4047 |
 
 *MacBook Pro M3Max 14" 36GB 2024 (30 GPU cores)*
 

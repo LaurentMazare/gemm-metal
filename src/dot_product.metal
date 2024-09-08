@@ -384,7 +384,9 @@ void sgemm_tiled_simd(
   data2 += (gid.y * ntg.y + lid.y) * 32;
 
   simdgroup_float8x8 acc[4][4];
+  #pragma unroll(4)
   for (uint i = 0; i < 4; i++) {
+    #pragma unroll(4)
     for (uint j = 0; j < 4; j++) {
       acc[i][j] = simdgroup_float8x8(0);
     }
@@ -393,18 +395,23 @@ void sgemm_tiled_simd(
   simdgroup_float8x8 B[4];
   for (uint k = 0; k < K; k+=8) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
+    #pragma unroll(4)
     for (uint i = 0; i < 4; ++i) {
       simdgroup_load(A[i], data1+k+i*8*K, K, ulong2(0, 0));
       simdgroup_load(B[i], data2+8*i+k*N, N, ulong2(0, 0));
     }
 
+    #pragma unroll(4)
     for (uint i = 0; i < 4; ++i) {
+      #pragma unroll(4)
       for (uint j = 0; j < 4; ++j) {
         simdgroup_multiply_accumulate(acc[i][j], A[j], B[i], acc[i][j]);
       }
     }
   }
+  #pragma unroll(4)
   for (uint i = 0; i < 4; ++i) {
+    #pragma unroll(4)
     for (uint j = 0; j < 4; ++j) {
       simdgroup_store(acc[i][j], a+8*i+8*j*N, N, ulong2(0, 0));
     }
