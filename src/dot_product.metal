@@ -4,17 +4,6 @@ using namespace metal;
 #define BLOCKSIZE 32
 
 [[kernel]]
-void dot_product(
-  device const float *a,
-  device const float *b,
-  device float *c,
-  uint3 tpig[[thread_position_in_grid]])
-{
-  int index = tpig.x;
-  c[index] = a[index] * b[index];
-}
-
-[[kernel]]
 void sgemm_naive(
   device const float *A,
   device const float *B,
@@ -233,3 +222,109 @@ typedef void (sgemm_shared_ab)(
   uint3, uint3, uint3);
 
 template [[host_name("sgemm_1d_bt_64_64_8_8")]] kernel sgemm_shared_ab sgemm_1d_block_tiling<64, 64, 8, 8>;
+
+template <const int BM, const int BN, const int BK, const int TM, const int TN>
+kernel void sgemm_2d_block_tiling(
+  device const float *A,
+  device const float *B,
+  device float *C,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha,
+  constant float &beta,
+  threadgroup float* As [[threadgroup(0)]],
+  threadgroup float* Bs [[threadgroup(1)]],
+  uint3 tgpig[[threadgroup_position_in_grid]],
+  uint3 tpitg[[thread_position_in_threadgroup]],
+  uint3   ntg[[threads_per_threadgroup]]
+) {
+  const uint cRow = tgpig.y;
+  const uint cCol = tgpig.x;
+
+  const uint totalResultsBlocktile = BM * BN;
+  // A thread is responsible for calculating TM*TN elements in the blocktile
+  const uint numThreadsBlocktile = totalResultsBlocktile / (TM * TN);
+
+  // ResultsPerBlock / ResultsPerThread == ThreadsPerBlock
+  assert(numThreadsBlocktile == blockDim.x);
+
+  // BN/TN are the number of threads to span a column
+  const int threadCol = tpitg.x % (BN / TN);
+  const int threadRow = tpitg.x / (BN / TN);
+
+  // allocate space for the current blocktile in smem
+  // __shared__ float As[BM * BK];
+  // __shared__ float Bs[BK * BN];
+
+  // Move blocktile to beginning of A's row and B's column
+  A += cRow * BM * K;
+  B += cCol * BN;
+  C += cRow * BM * N + cCol * BN;
+
+  // calculating the indices that this thread will load into SMEM
+  const uint innerRowA = tpitg.x / BK;
+  const uint innerColA = tpitg.x % BK;
+  // calculates the number of rows of As that are being loaded in a single step
+  // by a single block
+  const uint strideA = numThreadsBlocktile / BK;
+  const uint innerRowB = tpitg.x / BN;
+  const uint innerColB = tpitg.x % BN;
+  // for both As and Bs we want each load to span the full column-width, for
+  // better GMEM coalescing (as opposed to spanning full row-width and iterating
+  // across columns)
+  const uint strideB = numThreadsBlocktile / BN;
+
+  // allocate thread-local cache for results in registerfile
+  float threadResults[TM * TN] = {0.0};
+  // register caches for As and Bs
+  float regM[TM] = {0.0};
+  float regN[TN] = {0.0};
+
+  // outer-most loop over block tiles
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
+    // populate the SMEM caches
+    for (uint loadOffset = 0; loadOffset < BM; loadOffset += strideA) {
+      As[(innerRowA + loadOffset) * BK + innerColA] =
+          A[(innerRowA + loadOffset) * K + innerColA];
+    }
+    for (uint loadOffset = 0; loadOffset < BK; loadOffset += strideB) {
+      Bs[(innerRowB + loadOffset) * BN + innerColB] =
+          B[(innerRowB + loadOffset) * N + innerColB];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // advance blocktile
+    A += BK;     // move BK columns to right
+    B += BK * N; // move BK rows down
+
+    // calculate per-thread results
+    for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+      // block into registers
+      for (uint i = 0; i < TM; ++i) {
+        regM[i] = As[(threadRow * TM + i) * BK + dotIdx];
+      }
+      for (uint i = 0; i < TN; ++i) {
+        regN[i] = Bs[dotIdx * BN + threadCol * TN + i];
+      }
+      for (uint resIdxM = 0; resIdxM < TM; ++resIdxM) {
+        for (uint resIdxN = 0; resIdxN < TN; ++resIdxN) {
+          threadResults[resIdxM * TN + resIdxN] +=
+              regM[resIdxM] * regN[resIdxN];
+        }
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  // write out the results
+  for (uint resIdxM = 0; resIdxM < TM; ++resIdxM) {
+    for (uint resIdxN = 0; resIdxN < TN; ++resIdxN) {
+      C[(threadRow * TM + resIdxM) * N + threadCol * TN + resIdxN] =
+          alpha * threadResults[resIdxM * TN + resIdxN] +
+          beta * C[(threadRow * TM + resIdxM) * N + threadCol * TN + resIdxN];
+    }
+  }
+}
+
+template [[host_name("sgemm_2d_bt_64_64_8_8_8")]] kernel sgemm_shared_ab sgemm_2d_block_tiling<64, 64, 8, 8, 8>;

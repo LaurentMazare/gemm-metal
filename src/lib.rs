@@ -238,3 +238,41 @@ fn gemm_1d_tiling_(
         &[BM * BK, BK * BN],
     )
 }
+
+pub fn gemm_2d_tiling(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_2d_tiling_(m, n, k, repeats, false)
+}
+
+pub fn gemm_2d_tiling_check(m: usize, n: usize, k: usize, repeats: usize) -> anyhow::Result<()> {
+    gemm_2d_tiling_(m, n, k, repeats, true)
+}
+
+// This is only correct when the block size is divisible by 64.
+fn gemm_2d_tiling_(
+    m: usize,
+    n: usize,
+    k: usize,
+    repeats: usize,
+    check: bool,
+) -> anyhow::Result<()> {
+    // Maybe this should use 128 rather than 64?
+    // https://github.com/siboehm/SGEMM_CUDA/blob/60cba6f9b20a198116c76f18de8047f44df8c8b8/src/runner.cu#L198
+    const BM: u64 = 64;
+    const BN: u64 = 64;
+    const BK: u64 = 8;
+    const TM: u64 = 8;
+    const TN: u64 = 8;
+    let grid_size = metal::MTLSize::new((n as u64).div_ceil(BN), (m as u64).div_ceil(BM), 1);
+    let threadgroup_size = metal::MTLSize::new((BM * BN) / (TN * TM), 1, 1);
+    launch_gemm(
+        "sgemm_2d_bt_64_64_8_8_8",
+        m,
+        n,
+        k,
+        repeats,
+        check,
+        grid_size,
+        threadgroup_size,
+        &[BM * BK, BK * BN],
+    )
+}

@@ -25,11 +25,13 @@ fn main() -> anyhow::Result<()> {
                 // gemm_metal::gemm_coalescing_check(sz, sz, sz, cnt)?;
                 // gemm_metal::gemm_shared_mem_block_check(sz, sz, sz, cnt)?;
                 gemm_metal::gemm_1d_tiling_check(sz, sz, sz, cnt)?;
+                gemm_metal::gemm_2d_tiling_check(sz, sz, sz, cnt)?;
             } else {
                 gemm_metal::gemm_naive(sz, sz, sz, cnt)?;
                 gemm_metal::gemm_coalescing(sz, sz, sz, cnt)?;
                 gemm_metal::gemm_shared_mem_block(sz, sz, sz, cnt)?;
                 gemm_metal::gemm_1d_tiling(sz, sz, sz, cnt)?;
+                gemm_metal::gemm_2d_tiling(sz, sz, sz, cnt)?;
             }
         }
         Ok(())
