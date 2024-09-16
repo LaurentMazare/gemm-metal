@@ -30,6 +30,69 @@ fn check<K: GemmKernel>(n: usize) -> anyhow::Result<f32> {
     Ok(max_diff)
 }
 
+fn candle_check(mfa: bool, n: usize) -> anyhow::Result<f32> {
+    let device = match metal::Device::system_default() {
+        Some(device) => device,
+        None => anyhow::bail!("no default device found"),
+    };
+
+    let (m, k) = (n, n);
+
+    let a: Matrix<f32> = Matrix::randn(&device, m, k);
+    let b: Matrix<f32> = Matrix::randn(&device, k, n);
+    let c: Matrix<f32> = Matrix::zeros(&device, m, n);
+
+    let kernels = gemm_metal::candle::Kernels::new();
+    let command_queue = device.new_command_queue();
+    let command_buffer = command_queue.new_command_buffer();
+    if mfa {
+        gemm_metal::candle::call_mfa_gemm(
+            &device,
+            command_buffer,
+            &kernels,
+            "sgemm",
+            (1, m, n, k),
+            /* lhs_stride */ &[m * k, k, 1],
+            /* lhs_offset */ 0,
+            /* lhs_buffer */ a.buffer(),
+            /* rhs_stride */ &[n * k, n, 1],
+            /* rhs_offset */ 0,
+            /* rhs_buffer */ b.buffer(),
+            /* output */ c.buffer(),
+        )?;
+    } else {
+        gemm_metal::candle::call_mlx_gemm(
+            &device,
+            command_buffer,
+            &kernels,
+            gemm_metal::candle::GemmDType::F32,
+            (1, m, n, k),
+            /* lhs_stride */ &[m * k, k, 1],
+            /* lhs_offset */ 0,
+            /* lhs_buffer */ a.buffer(),
+            /* rhs_stride */ &[n * k, n, 1],
+            /* rhs_offset */ 0,
+            /* rhs_buffer */ b.buffer(),
+            /* output */ c.buffer(),
+        )?;
+    }
+    command_buffer.commit();
+    command_buffer.wait_until_completed();
+
+    let c_vec = c.to_vec();
+    let pl = gemm_metal::pipeline::<gemm_metal::Naive>()?;
+    let cq = device.new_command_queue();
+    gemm_metal::mm_sync::<gemm_metal::Naive>(&a, &b, &c, &pl, &cq)?;
+    let c_ref = c.to_vec();
+    let max_diff = c_vec
+        .iter()
+        .zip(c_ref.iter())
+        .map(|(v1, v2)| (v1 - v2).abs())
+        .max_by(f32::total_cmp)
+        .unwrap();
+    Ok(max_diff)
+}
+
 fn run_bench<K: GemmKernel>(n: usize, repeats: usize) -> anyhow::Result<f64> {
     let device = match metal::Device::system_default() {
         Some(device) => device,
@@ -75,6 +138,17 @@ fn run_benchs<K: GemmKernel>() -> anyhow::Result<()> {
         std::io::stdout().flush()?;
     }
     println!();
+    Ok(())
+}
+
+fn run_candle_checks(mfa: bool) -> anyhow::Result<()> {
+    let name = if mfa { "CANDLE_MFA" } else { "CANDLE_MLX" };
+    for &sz in SIZES_TO_CHECK {
+        let diff = candle_check(mfa, sz)?;
+        if diff.is_nan() || diff > 1e-5 {
+            println!("DIFF SPOTTED {} {sz} {diff}", name);
+        }
+    }
     Ok(())
 }
 
@@ -181,6 +255,8 @@ fn main() -> anyhow::Result<()> {
         println!("MaxTransferRate:            {}", device.max_transfer_rate());
         println!("MaxBufferLength:            {}", device.max_buffer_length());
 
+        run_candle_checks(true)?;
+        run_candle_checks(false)?;
         run_checks::<gemm_metal::TiledSimd>()?;
         run_checks::<gemm_metal::NaiveSimd>()?;
         run_checks::<gemm_metal::Tiling2D>()?;
