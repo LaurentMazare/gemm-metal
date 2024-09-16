@@ -147,7 +147,7 @@ fn candle_bench(mfa: bool, n: usize) -> anyhow::Result<f64> {
         command_buffer.wait_until_completed();
         if let Some(start_time) = start_time {
             let dt = start_time.elapsed().as_secs_f64();
-            if dt > MIN_DURATION_SEC {
+            if repeat_idx > 20 || dt > MIN_DURATION_SEC {
                 let gflops =
                     (n * m * k) as f64 * 2. / (1e9 * dt) * (repeat_idx + 1 - WARMUP_REPEATS) as f64;
                 return Ok(gflops);
@@ -155,6 +155,20 @@ fn candle_bench(mfa: bool, n: usize) -> anyhow::Result<f64> {
         }
     }
     unreachable!()
+}
+
+fn run_candle_benchs(mfa: bool) -> anyhow::Result<()> {
+    use std::io::Write;
+
+    let name = if mfa { "CANDLE_MFA" } else { "CANDLE_MLX" };
+    print!("{:26} ", name);
+    for &sz in SIZES_TO_BENCH {
+        let gflops = candle_bench(mfa, sz)?;
+        print!("{gflops:6.0} ");
+        std::io::stdout().flush()?;
+    }
+    println!();
+    Ok(())
 }
 
 fn main() -> anyhow::Result<()> {
@@ -166,14 +180,6 @@ fn main() -> anyhow::Result<()> {
         println!("MaxThreadsPerThreadgroup:   {:?}", device.max_threads_per_threadgroup());
         println!("MaxTransferRate:            {}", device.max_transfer_rate());
         println!("MaxBufferLength:            {}", device.max_buffer_length());
-
-        for n in [1024, 2048, 4096] {
-            for mfa in [false, true] {
-                let gflops = candle_bench(mfa, n)?;
-                let kernel = if mfa { "MFA" } else { "MLX" };
-                println!("{kernel} {n:5} {gflops}");
-            }
-        }
 
         run_checks::<gemm_metal::TiledSimd>()?;
         run_checks::<gemm_metal::NaiveSimd>()?;
@@ -188,6 +194,9 @@ fn main() -> anyhow::Result<()> {
             print!("{sz:6} ");
         }
         println!();
+
+        run_candle_benchs(true)?;
+        run_candle_benchs(false)?;
         run_benchs::<gemm_metal::TiledSimd>()?;
         run_benchs::<gemm_metal::NaiveSimd>()?;
         run_benchs::<gemm_metal::Tiling2D>()?;
