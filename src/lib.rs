@@ -2,7 +2,7 @@
 use anyhow::{Error as E, Result};
 
 const DOT: &str = include_str!("dot_product.metal");
-
+pub mod candle;
 mod utils;
 
 pub struct Matrix<T> {
