@@ -222,7 +222,7 @@ impl GemmKernel for TiledSimd8 {
         metal::MTLSize::new((m as u64).div_ceil(64), (n as u64).div_ceil(64), 1)
     }
     fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
-        metal::MTLSize::new(64, 1, 1)
+        metal::MTLSize::new(32, 1, 1)
     }
 }
 
