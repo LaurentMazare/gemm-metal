@@ -364,9 +364,21 @@ void sgemm_naive_simd(
   simdgroup_store(acc, a, N, ulong2(0, 0));
 }
 
+typedef void (sgemm_simple_sig)(
+  device const float *A,
+  device const float *B,
+  device float *C,
+  constant uint32_t &M,
+  constant uint32_t &N,
+  constant uint32_t &K,
+  constant float &alpha,
+  constant float &beta,
+  uint3, uint3, uint3);
+
+
 // https://github.com/tinygrad/tinygrad/blob/750696a0269d87f09f7d95da71b71f9ea7dc3a7e/extra/gemm/metal_matmul.py#L33
-[[kernel]]
-void sgemm_tiled_simd(
+template <const short NBLK>
+kernel void sgemm_tiled_simd(
   device const float *data1,
   device const float *data2,
   device float *a,
@@ -379,41 +391,44 @@ void sgemm_tiled_simd(
   uint3 lid[[thread_position_in_threadgroup]],
   uint3 ntg[[threads_per_threadgroup]]
 ) {
-  a += gid.x * 32 * N + (gid.y * ntg.y + lid.y) * 32;
-  data1 += gid.x * 32 * K;
-  data2 += (gid.y * ntg.y + lid.y) * 32;
+  short block_size = NBLK * 8;
+  a += gid.x * block_size * N + (gid.y * ntg.y + lid.y) * block_size;
+  data1 += gid.x * block_size * K;
+  data2 += (gid.y * ntg.y + lid.y) * block_size;
 
-  simdgroup_float8x8 acc[4][4];
-  #pragma unroll(4)
-  for (uint i = 0; i < 4; i++) {
-    #pragma unroll(4)
-    for (uint j = 0; j < 4; j++) {
+  simdgroup_float8x8 acc[NBLK][NBLK];
+  #pragma unroll(NBLK)
+  for (uint i = 0; i < NBLK; i++) {
+    #pragma unroll(NBLK)
+    for (uint j = 0; j < NBLK; j++) {
       acc[i][j] = simdgroup_float8x8(0);
     }
   }
-  simdgroup_float8x8 A[4];
-  simdgroup_float8x8 B[4];
-  for (uint k = 0; k < K; k+=8) {
+  simdgroup_float8x8 A[NBLK];
+  simdgroup_float8x8 B[NBLK];
+  for (uint k = 0; k < K; k += 8) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    #pragma unroll(4)
-    for (uint i = 0; i < 4; ++i) {
+    #pragma unroll(NBLK)
+    for (uint i = 0; i < NBLK; ++i) {
       simdgroup_load(A[i], data1+k+i*8*K, K, ulong2(0, 0));
       simdgroup_load(B[i], data2+8*i+k*N, N, ulong2(0, 0));
     }
 
-    #pragma unroll(4)
-    for (uint i = 0; i < 4; ++i) {
-      #pragma unroll(4)
-      for (uint j = 0; j < 4; ++j) {
+    #pragma unroll(NBLK)
+    for (uint i = 0; i < NBLK; ++i) {
+      #pragma unroll(NBLK)
+      for (uint j = 0; j < NBLK; ++j) {
         simdgroup_multiply_accumulate(acc[i][j], A[j], B[i], acc[i][j]);
       }
     }
   }
-  #pragma unroll(4)
-  for (uint i = 0; i < 4; ++i) {
-    #pragma unroll(4)
-    for (uint j = 0; j < 4; ++j) {
+  #pragma unroll(NBLK)
+  for (uint i = 0; i < NBLK; ++i) {
+    #pragma unroll(NBLK)
+    for (uint j = 0; j < NBLK; ++j) {
       simdgroup_store(acc[i][j], a+8*i+8*j*N, N, ulong2(0, 0));
     }
   }
 }
+
+template [[host_name("sgemm_tiled_simd4")]] kernel sgemm_simple_sig sgemm_tiled_simd<4>;
