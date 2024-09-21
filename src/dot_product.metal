@@ -431,4 +431,7 @@ kernel void sgemm_tiled_simd(
   }
 }
 
+template [[host_name("sgemm_tiled_simd1")]] kernel sgemm_simple_sig sgemm_tiled_simd<1>;
+template [[host_name("sgemm_tiled_simd2")]] kernel sgemm_simple_sig sgemm_tiled_simd<2>;
 template [[host_name("sgemm_tiled_simd4")]] kernel sgemm_simple_sig sgemm_tiled_simd<4>;
+template [[host_name("sgemm_tiled_simd8")]] kernel sgemm_simple_sig sgemm_tiled_simd<8>;

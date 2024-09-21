@@ -257,7 +257,10 @@ fn main() -> anyhow::Result<()> {
 
         run_candle_checks(true)?;
         run_candle_checks(false)?;
-        run_checks::<gemm_metal::TiledSimd>()?;
+        run_checks::<gemm_metal::TiledSimd1>()?;
+        run_checks::<gemm_metal::TiledSimd2>()?;
+        run_checks::<gemm_metal::TiledSimd4>()?;
+        run_checks::<gemm_metal::TiledSimd8>()?;
         run_checks::<gemm_metal::NaiveSimd>()?;
         run_checks::<gemm_metal::Tiling2D>()?;
         run_checks::<gemm_metal::Tiling1D>()?;
@@ -273,7 +276,10 @@ fn main() -> anyhow::Result<()> {
 
         run_candle_benchs(true)?;
         run_candle_benchs(false)?;
-        run_benchs::<gemm_metal::TiledSimd>()?;
+        run_benchs::<gemm_metal::TiledSimd1>()?;
+        run_benchs::<gemm_metal::TiledSimd2>()?;
+        run_benchs::<gemm_metal::TiledSimd4>()?;
+        run_benchs::<gemm_metal::TiledSimd8>()?;
         run_benchs::<gemm_metal::NaiveSimd>()?;
         run_benchs::<gemm_metal::Tiling2D>()?;
         run_benchs::<gemm_metal::Tiling1D>()?;

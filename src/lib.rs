@@ -178,8 +178,32 @@ impl GemmKernel for NaiveSimd {
     }
 }
 
-pub struct TiledSimd;
-impl GemmKernel for TiledSimd {
+pub struct TiledSimd1;
+impl GemmKernel for TiledSimd1 {
+    const NAME: &'static str = "sgemm_tiled_simd1";
+    const SHARED_MEM: &'static [u64] = &[];
+    fn grid_size(m: usize, n: usize) -> metal::MTLSize {
+        metal::MTLSize::new((m as u64).div_ceil(8), (n as u64).div_ceil(16), 1)
+    }
+    fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
+        metal::MTLSize::new(32, 2, 1)
+    }
+}
+
+pub struct TiledSimd2;
+impl GemmKernel for TiledSimd2 {
+    const NAME: &'static str = "sgemm_tiled_simd2";
+    const SHARED_MEM: &'static [u64] = &[];
+    fn grid_size(m: usize, n: usize) -> metal::MTLSize {
+        metal::MTLSize::new((m as u64).div_ceil(16), (n as u64).div_ceil(32), 1)
+    }
+    fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
+        metal::MTLSize::new(32, 2, 1)
+    }
+}
+
+pub struct TiledSimd4;
+impl GemmKernel for TiledSimd4 {
     const NAME: &'static str = "sgemm_tiled_simd4";
     const SHARED_MEM: &'static [u64] = &[];
     fn grid_size(m: usize, n: usize) -> metal::MTLSize {
@@ -187,6 +211,18 @@ impl GemmKernel for TiledSimd {
     }
     fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
         metal::MTLSize::new(32, 2, 1)
+    }
+}
+
+pub struct TiledSimd8;
+impl GemmKernel for TiledSimd8 {
+    const NAME: &'static str = "sgemm_tiled_simd8";
+    const SHARED_MEM: &'static [u64] = &[];
+    fn grid_size(m: usize, n: usize) -> metal::MTLSize {
+        metal::MTLSize::new((m as u64).div_ceil(64), (n as u64).div_ceil(64), 1)
+    }
+    fn threadgroup_size(_: usize, _: usize) -> metal::MTLSize {
+        metal::MTLSize::new(64, 1, 1)
     }
 }
 
