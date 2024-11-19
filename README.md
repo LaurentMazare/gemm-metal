@@ -11,7 +11,8 @@ the kernels are certainly naive and/or buggy.
 
 ## Benchmarks
 
-All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
+The three first benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
+The last benchmark uses rev `7076b3e`.
 
 *MacBook Air M3 16GB 2024 (10 GPU cores)*
 
@@ -50,3 +51,16 @@ All the benchmarks below are for rev `247ddaa`. Numbers are in GFLOPS.
 | NaiveSimd | 864 | 1957 | 2215 | 2216 | 2033 | 1833 |
 | TiledSimd | 581 | 2102 | 6276 | 7444 | 8235 | 8292 |
 
+*MacMini M4Pro 24GB 2024 (16 GPU cores)*
+
+| Kernel | 512 | 1024 | 2048 | 4096 | 6144 | 8192 |
+| ------ | --- | ---- | ---- | ---- | ---- | ---- |
+| Naive | 163 |  193 |  198 |  206 |  165 |  219 |
+| Coalescing| 350 |  483 |  406 |  313 |  310 |  305 |
+| SharedMem |599 |  890 |  967 |  953 |  970 |  971 |
+| Tiling1D | 759 | 1259 | 1349 | 1493 | 1534 | 1544 |
+| Tiling2D | 972 | 1976 | 2377 | 2329 | 2423 | 2442 |
+| NaiveSimd | 821 | 1395 | 1569 | 1433 | 1313 | 1146 |
+| TiledSimd | 1195 | 3588 | 3934 | 4715 | 5166 | 5229 |
+| CandleMFA | 303 | 1264 | 1701 | 1547 | 1443 | 1419 |
+| CandleMLX | 1376 | 3603 | 4849 | 5140 | 5136 | 5160 |
